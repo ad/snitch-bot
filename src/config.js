@@ -27,7 +27,7 @@ export function validateEnv(env) {
 /**
  * Returns a typed configuration object with all environment variables
  * @param {Object} env - Environment bindings from Cloudflare Workers
- * @returns {Object} - Configuration object with computed aiEnabled flag
+ * @returns {Object} - Configuration object
  */
 export function getConfig(env) {
   // Required fields
@@ -35,27 +35,17 @@ export function getConfig(env) {
   const adminChatId = env.ADMIN_CHAT_ID;
   const accessToken = env.ACCESS_TOKEN;
 
-  // Optional fields for AI functionality
-  const accountId = env.ACCOUNT_ID || null;
-  const cfAiToken = env.CF_AI_TOKEN || null;
-
   // Optional fields for testing and access control
   const testMode = env.TEST_MODE === 'true' || env.TEST_MODE === true;
   const adminChatIdTest = env.ADMIN_CHAT_ID_TEST || null;
   const revokeAllAccess = env.REVOKE_ALL_ACCESS === 'true' || env.REVOKE_ALL_ACCESS === true;
 
-  // Computed flag: AI is enabled only if both CF_AI_TOKEN and ACCOUNT_ID are present
-  const aiEnabled = !!(cfAiToken && accountId);
-
   return {
     telegramToken,
     adminChatId,
     accessToken,
-    accountId,
-    cfAiToken,
     testMode,
     adminChatIdTest,
-    revokeAllAccess,
-    aiEnabled
+    revokeAllAccess
   };
 }

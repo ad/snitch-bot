@@ -104,7 +104,7 @@ function sleep(ms) {
  * @param {string} text - Message text
  * @param {Object} options - Additional options (reply_markup, parse_mode, etc.)
  * @param {Object} env - Environment bindings
- * @returns {Promise<{success: boolean, messageId?: number, error?: string}>}
+ * @returns {Promise<{success: boolean, messageId?: number, data?: Object, error?: string}>}
  */
 export async function sendMessage(chatId, text, options = {}, env) {
     try {
@@ -123,6 +123,7 @@ export async function sendMessage(chatId, text, options = {}, env) {
         return {
             success: response.ok,
             messageId: response.result?.message_id,
+            data: response.result,
         };
     } catch (error) {
         console.error('Failed to send message:', error.message, error.stack);
@@ -316,6 +317,75 @@ export async function answerCallbackQuery(callbackQueryId, text = '', env) {
         console.error('Failed to answer callback query:', error.message, error.stack);
         return {
             success: false,
+        };
+    }
+}
+
+/**
+ * Edits text and reply markup of a message
+ * @param {number|string} chatId - Telegram chat ID
+ * @param {number} messageId - Message ID to edit
+ * @param {string} text - New message text
+ * @param {Object} options - Additional options (reply_markup, parse_mode, etc.)
+ * @param {Object} env - Environment bindings
+ * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
+ */
+export async function editMessageText(chatId, messageId, text, options = {}, env) {
+    try {
+        if (!chatId || !messageId || !text) {
+            throw new Error('chatId, messageId, and text are required');
+        }
+
+        const params = {
+            chat_id: chatId,
+            message_id: messageId,
+            text: text,
+            ...options,
+        };
+
+        const response = await apiRequest('editMessageText', params, env);
+
+        return {
+            success: response.ok,
+            data: response.result,
+        };
+    } catch (error) {
+        console.error('Failed to edit message text:', error.message, error.stack);
+        return {
+            success: false,
+            error: error.message,
+        };
+    }
+}
+
+/**
+ * Deletes a message
+ * @param {number|string} chatId - Telegram chat ID
+ * @param {number} messageId - Message ID to delete
+ * @param {Object} env - Environment bindings
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function deleteMessage(chatId, messageId, env) {
+    try {
+        if (!chatId || !messageId) {
+            throw new Error('chatId and messageId are required');
+        }
+
+        const params = {
+            chat_id: chatId,
+            message_id: messageId,
+        };
+
+        const response = await apiRequest('deleteMessage', params, env);
+
+        return {
+            success: response.ok,
+        };
+    } catch (error) {
+        console.error('Failed to delete message:', error.message, error.stack);
+        return {
+            success: false,
+            error: error.message,
         };
     }
 }

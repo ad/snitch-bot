@@ -9,21 +9,21 @@ This guide provides step-by-step instructions for deploying the Anonymous Feedba
 npm install
 
 # 2. Login to Cloudflare
-wrangler login
+npx wrangler login
 
 # 3. Create KV namespaces
-wrangler kv:namespace create "KV"
-wrangler kv:namespace create "KV" --preview
+npx wrangler kv:namespace create "KV"
+npx wrangler kv:namespace create "KV" --preview
 
 # 4. Update wrangler.toml with KV namespace IDs
 
 # 5. Set secrets
-wrangler secret put TELEGRAM_TOKEN
-wrangler secret put ADMIN_CHAT_ID
-wrangler secret put ACCESS_TOKEN
+npx wrangler secret put TELEGRAM_TOKEN
+npx wrangler secret put ADMIN_CHAT_ID
+npx wrangler secret put ACCESS_TOKEN
 
 # 6. Deploy
-wrangler deploy --env production
+npx wrangler deploy --env production
 
 # 7. Register webhook
 curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
@@ -125,23 +125,6 @@ openssl rand -hex 32
 
 wrangler secret put ACCESS_TOKEN
 # Enter: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8
-```
-
-#### Optional Secrets (AI Sentiment Analysis)
-
-**ACCOUNT_ID** - From Cloudflare Dashboard:
-```bash
-# Find in: Cloudflare Dashboard → Workers & Pages → Overview
-wrangler secret put ACCOUNT_ID
-# Enter: your-cloudflare-account-id
-```
-
-**CF_AI_TOKEN** - From Cloudflare Dashboard:
-```bash
-# Create in: Cloudflare Dashboard → My Profile → API Tokens
-# Use template: "Edit Cloudflare Workers" or create custom with AI permissions
-wrangler secret put CF_AI_TOKEN
-# Enter: your-cloudflare-ai-token
 ```
 
 ### Step 6: Deploy to Production

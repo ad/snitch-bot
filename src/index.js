@@ -5,9 +5,8 @@
 
 import { validateEnv, getConfig } from './config.js';
 import { activateUser, isTrustedUser, revokeAllAccess } from './auth.js';
-import { sendMessage, createInlineKeyboard, answerCallbackQuery, sendPhoto, sendVideo, sendDocument, sendMediaGroup } from './telegram.js';
+import { sendMessage, createInlineKeyboard, answerCallbackQuery, sendPhoto, sendVideo, sendDocument, sendMediaGroup, editMessageText, deleteMessage } from './telegram.js';
 import { getSession, updateSession, clearSession } from './session.js';
-import { analyzeSentiment, isAIEnabled } from './ai.js';
 import { formatAdminMessage } from './formatter.js';
 import { getRandomPhrase } from './phrases.js';
 
@@ -182,11 +181,11 @@ async function routeCommand(message, env) {
                         'Этот бот позволяет отправлять анонимные сообщения руководству.\n\n' +
                         'Выберите категорию вашего сообщения:';
 
-                    // Create session with category step
-                    await updateSession(userId, { step: 'category' }, env);
+                    // Send category selection keyboard and save message ID
+                    const flowMessageId = await sendCategorySelection(chatId, welcomeMessage, env);
 
-                    // Send category selection keyboard
-                    await sendCategorySelection(chatId, welcomeMessage, env);
+                    // Create session with category step and flow message ID
+                    await updateSession(userId, { step: 'category', flowMessageId: flowMessageId }, env);
                 }
             } else {
                 // No token provided - check if user is already trusted
@@ -199,11 +198,11 @@ async function routeCommand(message, env) {
                         'Этот бот позволяет отправлять анонимные сообщения руководству.\n\n' +
                         'Выберите категорию вашего сообщения:';
 
-                    // Create session with category step
-                    await updateSession(userId, { step: 'category' }, env);
+                    // Send category selection keyboard and save message ID
+                    const flowMessageId = await sendCategorySelection(chatId, welcomeMessage, env);
 
-                    // Send category selection keyboard
-                    await sendCategorySelection(chatId, welcomeMessage, env);
+                    // Create session with category step and flow message ID
+                    await updateSession(userId, { step: 'category', flowMessageId: flowMessageId }, env);
                 } else {
                     // Not trusted and no token - send neutral message
                     await sendMessage(chatId, 'Привет! Этот бот пока не активен.', {}, env);
@@ -275,24 +274,51 @@ async function routeCallbackQuery(callbackQuery, env) {
         // Handle category selection
         if (data.startsWith('category:')) {
             const category = data.replace('category:', '');
+            
+            // Map category to display name
+            const categoryNames = {
+                'idea': '💬 Идея / предложение',
+                'problem': '⚠️ Проблема / жалоба',
+                'gratitude': '❤️ Благодарность / признание'
+            };
 
             // Update session with selected category and move to topic step
             await updateSession(userId, {
                 category: category,
-                step: 'topic'
+                step: 'topic',
+                flowMessageId: callbackQuery.message.message_id
             }, env);
 
             // Answer callback query
             await answerCallbackQuery(callbackQuery.id, '', env);
 
-            // Send topic selection keyboard
-            await sendTopicSelection(chatId, env);
+            // Edit the message to show selected category and topic selection
+            const selectedMessage = `Выбрана категория: ${categoryNames[category] || category}`;
+            await sendTopicSelection(chatId, selectedMessage, env, callbackQuery.message.message_id);
+            
             return;
         }
 
         // Handle topic selection
         if (data.startsWith('topic:')) {
             const topic = data.replace('topic:', '');
+            
+            // Map topic to display name
+            const topicNames = {
+                'processes': 'Процессы',
+                'colleagues': 'Коллеги',
+                'conditions': 'Условия',
+                'salary': 'Зарплата',
+                'management': 'Менеджмент',
+                'other': 'Другое'
+            };
+            
+            // Map category to display name
+            const categoryNames = {
+                'idea': '💬 Идея / предложение',
+                'problem': '⚠️ Проблема / жалоба',
+                'gratitude': '❤️ Благодарность / признание'
+            };
 
             // Update session with selected topic and move to message step
             await updateSession(userId, {
@@ -303,12 +329,16 @@ async function routeCallbackQuery(callbackQuery, env) {
             // Answer callback query
             await answerCallbackQuery(callbackQuery.id, '', env);
 
-            // Send prompt asking user to write their message
-            const promptMessage =
-                'Отлично! Теперь напишите ваше сообщение.\n\n' +
-                'Вы можете отправить текст, фото, видео или документ или все вместе, но в одном сообщении.';
+            // Edit the message to show complete selection
+            const categoryName = categoryNames[session.category] || session.category;
+            const topicName = topicNames[topic] || topic;
+            const finalMessage = 
+                `Выбрана категория: ${categoryName}\n` +
+                `Выбрана тема: ${topicName}\n\n` +
+                `✍️ Отлично! Теперь напишите ваше сообщение.\n\n` +
+                `Вы можете отправить текст, фото, видео или документ или все вместе, но в одном сообщении.`;
 
-            await sendMessage(chatId, promptMessage, {}, env);
+            await editMessageText(chatId, callbackQuery.message.message_id, finalMessage, {}, env);
             return;
         }
 
@@ -329,11 +359,10 @@ async function routeCallbackQuery(callbackQuery, env) {
 
                 await answerCallbackQuery(callbackQuery.id, '', env);
 
-                const promptMessage =
-                    'Хорошо, напишите новое сообщение.\n\n' +
-                    'Вы можете отправить текст, фото, видео или документ.';
+                // Edit the message to remove buttons
+                const editedMessage = '✏️ Сообщение отменено. Напишите новое сообщение.';
+                await editMessageText(chatId, callbackQuery.message.message_id, editedMessage, {}, env);
 
-                await sendMessage(chatId, promptMessage, {}, env);
                 return;
             }
 
@@ -352,11 +381,19 @@ async function routeCallbackQuery(callbackQuery, env) {
 
                 await answerCallbackQuery(callbackQuery.id, '', env);
 
-                await sendCategorySelection(
+                // Edit the message to remove buttons
+                const editedMessage = '❌ Сообщение отменено.';
+                await editMessageText(chatId, callbackQuery.message.message_id, editedMessage, {}, env);
+
+                // Send new category selection and save message ID
+                const flowMessageId = await sendCategorySelection(
                     chatId,
                     'Начнём заново. Выберите категорию вашего сообщения:',
                     env
                 );
+                
+                // Update session with new flow message ID
+                await updateSession(userId, { flowMessageId: flowMessageId }, env);
                 return;
             }
 
@@ -364,8 +401,21 @@ async function routeCallbackQuery(callbackQuery, env) {
                 // User confirms sending the message
                 await answerCallbackQuery(callbackQuery.id, 'Отправка сообщения...', env);
 
+                // Edit the message to show sending status
+                const mediaCount = session.mediaItems ? session.mediaItems.length : 0;
+                const mediaText = mediaCount > 0 ? ` (${mediaCount} файл${mediaCount > 1 ? (mediaCount > 4 ? 'ов' : 'а') : ''})` : '';
+                const sendingMessage = `📤 Отправка сообщения${mediaText}...`;
+                await editMessageText(chatId, callbackQuery.message.message_id, sendingMessage, {}, env);
+
+                // Get fresh session to ensure we have all media items
+                const freshSession = await getSession(userId, env);
+                if (!freshSession) {
+                    await editMessageText(chatId, callbackQuery.message.message_id, '❌ Сессия истекла. Начните заново с /start', {}, env);
+                    return;
+                }
+
                 // Forward message to admin group
-                await forwardMessageToAdmin(userId, chatId, session, env);
+                await forwardMessageToAdmin(userId, chatId, freshSession, env, callbackQuery.message.message_id);
                 return;
             }
         }
@@ -417,19 +467,8 @@ async function handleMessage(message, env) {
             return;
         }
 
-        // Only process messages when in 'message' step
-        if (session.step !== 'message') {
-            await sendMessage(
-                chatId,
-                'Пожалуйста, следуйте инструкциям. Используйте /start для начала.',
-                {},
-                env
-            );
-            return;
-        }
-
         // Get existing session to check for pending media group
-        const existingSession = await getSession(userId, env);
+        const existingSession = session;
 
         // Extract text from message
         let messageText = message.text || message.caption || '';
@@ -460,6 +499,7 @@ async function handleMessage(message, env) {
 
         if (mediaGroupId) {
             // This is part of a media group - collect all messages
+            // Allow processing even if step is 'confirm' (for subsequent media group items)
             if (existingSession && existingSession.mediaGroupId === mediaGroupId) {
                 // Add this media to the existing collection
                 const existingMedia = existingSession.mediaItems || [];
@@ -467,46 +507,55 @@ async function handleMessage(message, env) {
 
                 // Update text if this message has caption and previous didn't
                 if (messageText && !existingSession.messageText) {
-                    // Use this caption
+                    messageText = messageText;
                 } else if (existingSession.messageText) {
-                    // Keep existing text
                     messageText = existingSession.messageText;
                 }
             }
 
-            // Store the media group and continue collecting
+            // Store the media group with all collected items
             await updateSession(userId, {
                 messageText: messageText,
                 mediaItems: mediaItems,
                 mediaGroupId: mediaGroupId,
-                waitingForMediaGroup: true
+                step: 'message', // Keep step as message so we can process it
+                lastMediaTimestamp: Date.now() // Track when last media was received
             }, env);
 
-            // Don't process yet - wait for all media group messages
+            console.log('Media group item processed. Total count:', mediaItems.length);
+
+            // For media groups, wait to collect all items before showing confirmation
+            // This prevents race conditions and multiple confirmation messages
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Get the latest session after the delay
+            const latestSession = await getSession(userId, env);
+
+            // Only process if:
+            // 1. This is still the same media group
+            // 2. No new media has been added in the last second (meaning collection is complete)
+            if (latestSession &&
+                latestSession.mediaGroupId === mediaGroupId &&
+                Date.now() - latestSession.lastMediaTimestamp >= 1000) {
+
+                console.log('Processing completed media group with', latestSession.mediaItems.length, 'items');
+
+                // Get the confirmMessageId to edit existing message
+                const confirmMessageId = latestSession.confirmMessageId || null;
+
+                await processMessageForSentiment(userId, chatId, latestSession, env, confirmMessageId);
+            } else {
+                console.log('Skipping - more media items are being collected');
+            }
+
             return;
         }
 
-        // If we had a pending media group and now got a non-group message,
-        // process the previous media group first
-        if (existingSession && existingSession.waitingForMediaGroup && existingSession.mediaItems && existingSession.mediaItems.length > 0) {
-            // Process the previous media group
-            await processMessageForSentiment(userId, chatId, existingSession, env);
-
-            // Now handle the current message as a new message
-            // Reset session for new message
-            await updateSession(userId, {
-                step: 'message',
-                messageText: null,
-                mediaItems: [],
-                mediaGroupId: null,
-                waitingForMediaGroup: false,
-                sentiment: null
-            }, env);
-
-            // Ask user to send message again
+        // Only process non-media-group messages when in 'message' step
+        if (session.step !== 'message') {
             await sendMessage(
                 chatId,
-                'Предыдущее сообщение обработано. Пожалуйста, отправьте новое сообщение.',
+                'Пожалуйста, следуйте инструкциям. Используйте /start для начала.',
                 {},
                 env
             );
@@ -560,85 +609,73 @@ async function handleMessage(message, env) {
  * @param {number|string} chatId - User's chat ID
  * @param {Object} session - User's session object
  * @param {Object} env - Environment bindings
+ * @param {string|null} messageId - Message ID to edit (for media groups)
  * @returns {Promise<void>}
  */
-async function processMessageForSentiment(userId, chatId, session, env) {
+async function processMessageForSentiment(userId, chatId, session, env, messageId = null) {
     try {
         const messageText = session.messageText;
 
-        // Analyze sentiment if AI is enabled and we have text
-        let sentiment = null;
-        if (messageText && isAIEnabled(env)) {
-            try {
-                const sentimentResult = await analyzeSentiment(messageText, env);
-                if (sentimentResult) {
-                    sentiment = sentimentResult.sentiment;
+        // Proceed directly to confirmation (no sentiment analysis)
+        const mediaCount = session.mediaItems ? session.mediaItems.length : 0;
+        const mediaText = mediaCount > 0 ? ` (${mediaCount} файл${mediaCount > 1 ? 'а' : ''})` : '';
 
-                    // Store sentiment in session
-                    try {
-                        await updateSession(userId, {
-                            sentiment: sentiment
-                        }, env);
-                    } catch (sessionError) {
-                        console.error('Error storing sentiment in session:', sessionError.message);
-                        // Continue processing even if session update fails
+        const confirmMessage =
+            `✅ Ваше сообщение готово к отправке${mediaText}.\n\n` +
+            'Нажмите "Отправить" для подтверждения или "Отменить" для начала заново.';
+
+        const keyboard = createInlineKeyboard([
+            [{ text: 'Отправить', callback_data: 'confirm:send' }],
+            [{ text: 'Отменить', callback_data: 'confirm:cancel' }]
+        ]);
+
+        // If we have a messageId (from previous confirmation), edit it instead of sending new
+        if (messageId) {
+                console.log('Editing existing confirmation message:', messageId);
+                try {
+                    const editResult = await editMessageText(chatId, messageId, confirmMessage, { reply_markup: keyboard }, env);
+                    console.log('Edit result:', editResult.success);
+                } catch (editError) {
+                    console.error('Error editing message:', editError.message);
+                    // If edit fails, send new message
+                    const result = await sendMessage(chatId, confirmMessage, { reply_markup: keyboard }, env);
+
+                    // Store the new message ID
+                    if (result.success && result.data && result.data.message_id) {
+                        try {
+                            await updateSession(userId, {
+                                confirmMessageId: result.data.message_id
+                            }, env);
+                        } catch (sessionError) {
+                            console.error('Error storing confirmation message ID:', sessionError.message);
+                        }
                     }
+            }
+        } else {
+            console.log('Sending new confirmation message');
+            const result = await sendMessage(chatId, confirmMessage, { reply_markup: keyboard }, env);
+
+            // Store the message ID for potential future edits
+            if (result.success && result.data && result.data.message_id) {
+                console.log('Storing confirmation message ID:', result.data.message_id);
+                try {
+                    await updateSession(userId, {
+                        confirmMessageId: result.data.message_id
+                    }, env);
+                } catch (sessionError) {
+                    console.error('Error storing confirmation message ID:', sessionError.message);
                 }
-            } catch (aiError) {
-                console.error('Error analyzing sentiment:', aiError.message);
-                // Continue without sentiment analysis (graceful degradation)
             }
         }
 
-        // If sentiment is NEGATIVE, show options to send or rewrite
-        if (sentiment === 'NEGATIVE') {
-            const warningMessage =
-                '⚠️ Обратите внимание: ваше сообщение содержит негативную тональность.\n\n' +
-                'Вы можете:\n' +
-                '• Отправить сообщение как есть\n' +
-                '• Изменить формулировку';
-
-            const keyboard = createInlineKeyboard([
-                [{ text: 'Отправить', callback_data: 'confirm:send' }],
-                [{ text: 'Изменить', callback_data: 'confirm:rewrite' }]
-            ]);
-
-            await sendMessage(chatId, warningMessage, { reply_markup: keyboard }, env);
-
-            // Update session step to sentiment_review
-            try {
-                await updateSession(userId, {
-                    step: 'sentiment_review'
-                }, env);
-            } catch (sessionError) {
-                console.error('Error updating session step:', sessionError.message);
-                // Continue processing
-            }
-        } else {
-            // If sentiment is POSITIVE/NEUTRAL or AI disabled, proceed to confirmation
-            const mediaCount = session.mediaItems ? session.mediaItems.length : 0;
-            const mediaText = mediaCount > 0 ? ` (${mediaCount} файл${mediaCount > 1 ? 'а' : ''})` : '';
-
-            const confirmMessage =
-                `✅ Ваше сообщение готово к отправке${mediaText}.\n\n` +
-                'Нажмите "Отправить" для подтверждения или "Отменить" для начала заново.';
-
-            const keyboard = createInlineKeyboard([
-                [{ text: 'Отправить', callback_data: 'confirm:send' }],
-                [{ text: 'Отменить', callback_data: 'confirm:cancel' }]
-            ]);
-
-            await sendMessage(chatId, confirmMessage, { reply_markup: keyboard }, env);
-
-            // Update session step to confirm
-            try {
-                await updateSession(userId, {
-                    step: 'confirm'
-                }, env);
-            } catch (sessionError) {
-                console.error('Error updating session step:', sessionError.message);
-                // Continue processing
-            }
+        // Update session step to confirm
+        try {
+            await updateSession(userId, {
+                step: 'confirm'
+            }, env);
+        } catch (sessionError) {
+            console.error('Error updating session step:', sessionError.message);
+            // Continue processing
         }
     } catch (error) {
         console.error('Error in processMessageForSentiment:', error.message, error.stack);
@@ -652,9 +689,10 @@ async function processMessageForSentiment(userId, chatId, session, env) {
  * @param {number|string} chatId - User's chat ID
  * @param {Object} session - User's session object
  * @param {Object} env - Environment bindings
+ * @param {number} confirmMessageId - Message ID to edit after sending (optional)
  * @returns {Promise<void>}
  */
-async function forwardMessageToAdmin(userId, chatId, session, env) {
+async function forwardMessageToAdmin(userId, chatId, session, env, confirmMessageId = null) {
     try {
         const config = getConfig(env);
 
@@ -671,17 +709,20 @@ async function forwardMessageToAdmin(userId, chatId, session, env) {
 
         const mediaItems = session.mediaItems || [];
 
+        // Log media items for debugging
+        console.log('Forwarding message with media items:', JSON.stringify({
+            count: mediaItems.length,
+            items: mediaItems
+        }));
+
         if (mediaItems.length > 1) {
             // Multiple media files - use sendMediaGroup
-            // First, send the formatted text message
-            await sendMessage(adminChatId, formattedMessage, {}, env);
-
-            // Then send the media group
+            // Add caption to the first media item
             const mediaGroup = mediaItems.map((item, index) => ({
                 type: item.type,
                 media: item.fileId,
-                // Only add caption to first item if there's no separate text
-                caption: index === 0 && !session.messageText ? formattedMessage : undefined
+                // Add formatted message as caption to first item
+                caption: index === 0 ? formattedMessage : undefined
             }));
 
             sendResult = await sendMediaGroup(adminChatId, mediaGroup, env);
@@ -708,14 +749,17 @@ async function forwardMessageToAdmin(userId, chatId, session, env) {
             throw new Error(`Failed to send message to admin: ${sendResult.error}`);
         }
 
-        // Message sent successfully - send inspirational phrase to user
+        // Message sent successfully
         const inspirationalPhrase = getRandomPhrase();
-        await sendMessage(
-            chatId,
-            inspirationalPhrase,
-            {},
-            env
-        );
+        
+        // If we have a confirmMessageId, edit it to show success
+        if (confirmMessageId) {
+            const successMessage = `✅ Сообщение отправлено!\n\n${inspirationalPhrase}`;
+            await editMessageText(chatId, confirmMessageId, successMessage, {}, env);
+        } else {
+            // Otherwise send a new message
+            await sendMessage(chatId, inspirationalPhrase, {}, env);
+        }
 
         // Log message to KV if TEST_MODE is enabled
         if (config.testMode) {
@@ -732,12 +776,12 @@ async function forwardMessageToAdmin(userId, chatId, session, env) {
                     sentiment: session.sentiment,
                     adminChatId: adminChatId
                 };
-                
+
                 // Store log with 30 day TTL
                 await env.KV.put(logKey, JSON.stringify(logData), {
                     expirationTtl: 2592000 // 30 days in seconds
                 });
-                
+
                 console.log('Message logged to KV:', logKey);
             } catch (logError) {
                 console.error('Error logging message to KV:', logError);
@@ -753,12 +797,18 @@ async function forwardMessageToAdmin(userId, chatId, session, env) {
 
         // Send error message to user
         try {
-            await sendMessage(
-                chatId,
-                'Произошла ошибка при отправке сообщения. Пожалуйста, попробуйте позже.',
-                {},
-                env
-            );
+            const errorMessage = 'Произошла ошибка при отправке сообщения. Пожалуйста, попробуйте позже.';
+            
+            if (confirmMessageId) {
+                await editMessageText(chatId, confirmMessageId, `❌ ${errorMessage}`, {}, env);
+            } else {
+                await sendMessage(
+                    chatId,
+                    errorMessage,
+                    {},
+                    env
+                );
+            }
         } catch (sendError) {
             console.error('Failed to send error message to user:', sendError.message);
         }
@@ -766,30 +816,39 @@ async function forwardMessageToAdmin(userId, chatId, session, env) {
 }
 
 /**
- * Sends category selection keyboard to user
+ * Sends or updates category selection keyboard
  * @param {number|string} chatId - Telegram chat ID
  * @param {string} text - Message text to send with keyboard
  * @param {Object} env - Environment bindings
- * @returns {Promise<void>}
+ * @param {number} messageId - Message ID to edit (optional)
+ * @returns {Promise<number>} Message ID
  */
-async function sendCategorySelection(chatId, text, env) {
+async function sendCategorySelection(chatId, text, env, messageId = null) {
     const keyboard = createInlineKeyboard([
         [{ text: '💬 Идея / предложение', callback_data: 'category:idea' }],
         [{ text: '⚠️ Проблема / жалоба', callback_data: 'category:problem' }],
         [{ text: '❤️ Благодарность / признание', callback_data: 'category:gratitude' }]
     ]);
 
-    await sendMessage(chatId, text, { reply_markup: keyboard }, env);
+    if (messageId) {
+        await editMessageText(chatId, messageId, text, { reply_markup: keyboard }, env);
+        return messageId;
+    } else {
+        const result = await sendMessage(chatId, text, { reply_markup: keyboard }, env);
+        return result.data?.message_id;
+    }
 }
 
 /**
- * Sends topic selection keyboard to user
+ * Sends or updates topic selection keyboard
  * @param {number|string} chatId - Telegram chat ID
+ * @param {string} previousText - Previous message text to prepend
  * @param {Object} env - Environment bindings
- * @returns {Promise<void>}
+ * @param {number} messageId - Message ID to edit (optional)
+ * @returns {Promise<number>} Message ID
  */
-async function sendTopicSelection(chatId, env) {
-    const text = 'Выберите тему вашего сообщения:';
+async function sendTopicSelection(chatId, previousText, env, messageId = null) {
+    const text = previousText + '\n\nВыберите тему вашего сообщения:';
 
     const keyboard = createInlineKeyboard([
         [{ text: 'Процессы', callback_data: 'topic:processes' }],
@@ -800,5 +859,11 @@ async function sendTopicSelection(chatId, env) {
         [{ text: 'Другое', callback_data: 'topic:other' }]
     ]);
 
-    await sendMessage(chatId, text, { reply_markup: keyboard }, env);
+    if (messageId) {
+        await editMessageText(chatId, messageId, text, { reply_markup: keyboard }, env);
+        return messageId;
+    } else {
+        const result = await sendMessage(chatId, text, { reply_markup: keyboard }, env);
+        return result.data?.message_id;
+    }
 }

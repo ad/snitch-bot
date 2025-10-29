@@ -1,12 +1,11 @@
 # Anonymous Feedback Bot
 
-Telegram-бот для анонимной обратной связи сотрудников компании, работающий на платформе Cloudflare Workers с интеграцией Cloudflare AI для анализа тональности сообщений.
+Telegram-бот для анонимной обратной связи сотрудников компании, работающий на платформе Cloudflare Workers.
 
 ## Features
 
 - 🔐 Secure activation via secret deeplink
 - 💬 Anonymous message forwarding to admin group
-- 📊 AI-powered sentiment analysis (optional)
 - 🎯 Message categorization (Ideas, Problems, Gratitude)
 - 🏷️ Topic selection (Processes, Colleagues, Conditions, Salary, Management, Other)
 - 💪 Inspirational responses to users
@@ -117,16 +116,6 @@ wrangler secret put ADMIN_CHAT_ID
 
 wrangler secret put ACCESS_TOKEN
 # Enter the token you generated in step 5
-```
-
-Optional secrets for AI sentiment analysis:
-
-```bash
-wrangler secret put ACCOUNT_ID
-# Enter your Cloudflare Account ID (found in Cloudflare Dashboard)
-
-wrangler secret put CF_AI_TOKEN
-# Enter your Cloudflare AI API token
 ```
 
 Optional secrets for staging/testing:
@@ -262,15 +251,6 @@ wrangler kv:key delete "session:123456" --binding KV --env production
 | `ADMIN_CHAT_ID` | Admin group chat ID (negative number) | `-1001234567890` | `wrangler secret put ADMIN_CHAT_ID` |
 | `ACCESS_TOKEN` | Secret activation token (min 32 chars) | `a1b2c3d4e5f6...` | `wrangler secret put ACCESS_TOKEN` |
 
-### Optional Variables (AI Sentiment Analysis)
-
-| Variable | Description | Example | How to Set |
-|----------|-------------|---------|------------|
-| `ACCOUNT_ID` | Cloudflare Account ID | `abc123def456...` | `wrangler secret put ACCOUNT_ID` |
-| `CF_AI_TOKEN` | Cloudflare AI API token | `xyz789...` | `wrangler secret put CF_AI_TOKEN` |
-
-**Note**: Both `ACCOUNT_ID` and `CF_AI_TOKEN` must be set for AI sentiment analysis to work. If either is missing, the bot will work without AI features (graceful degradation).
-
 ### Optional Variables (Testing & Administration)
 
 | Variable | Description | Example | How to Set |
@@ -352,9 +332,8 @@ https://t.me/my_feedback_bot?start=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
    - Менеджмент (Management)
    - Другое (Other)
 5. **Write message**: Type your message (text + optional photo/video/document)
-6. **Review sentiment** (if AI enabled): If negative sentiment detected, choose to rewrite or send as-is
-7. **Confirm**: Message is sent anonymously to admin group
-8. **Receive response**: Get an inspirational message confirming submission
+6. **Confirm**: Review and confirm sending
+7. **Receive response**: Get an inspirational message confirming submission
 
 ### For Administrators
 
@@ -365,7 +344,6 @@ Messages appear in the admin group with this format:
 
 Категория: 💬 Идея / предложение
 Тема: Процессы
-Тональность: Позитивная
 
 Текст:
 [User's message here]
@@ -599,18 +577,6 @@ curl -X POST "https://api.telegram.org/bot<TOKEN>/sendMessage" \
   -d '{"chat_id": "<ADMIN_CHAT_ID>", "text": "Test message"}'
 ```
 
-### AI Sentiment Analysis Not Working
-
-**Check if AI is enabled**:
-- Both `ACCOUNT_ID` and `CF_AI_TOKEN` must be set
-- Verify in Cloudflare Dashboard: Workers & Pages → AI
-
-**Check AI quota**:
-- Navigate to Cloudflare Dashboard → AI
-- Verify you haven't exceeded your plan limits
-
-**Note**: Bot works without AI (graceful degradation) - this is expected behavior if AI credentials are not configured
-
 ### Users Cannot Activate
 
 **Verify access token**:
@@ -662,7 +628,6 @@ curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
 
 - [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
 - [Cloudflare KV Documentation](https://developers.cloudflare.com/kv/)
-- [Cloudflare AI Documentation](https://developers.cloudflare.com/ai/)
 - [Telegram Bot API Documentation](https://core.telegram.org/bots/api)
 - [Wrangler CLI Documentation](https://developers.cloudflare.com/workers/wrangler/)
 
