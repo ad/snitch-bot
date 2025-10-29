@@ -1,0 +1,33 @@
+# Cloudflare Workers Configuration for Anonymous Feedback Bot
+# Documentation: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+# Worker name - will be part of your worker URL
+name = "anonymous-feedback-bot"
+
+# Entry point for the worker
+main = "src/index.js"
+
+# Compatibility date - determines which Workers runtime features are available
+compatibility_date = "2024-01-01"
+
+# Production environment configuration
+[env.production]
+vars = { TEST_MODE = "false" }
+
+# Staging environment configuration
+# When TEST_MODE=true, messages are sent to ADMIN_CHAT_ID_TEST
+[env.staging]
+vars = { TEST_MODE = "true" }
+
+# KV Namespace for storing session data and trusted users
+# Create namespaces with: wrangler kv:namespace create "KV"
+# Replace the IDs below with your actual namespace IDs
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id"           # Replace with production KV namespace ID
+preview_id = "your-preview-kv-namespace-id"  # Replace with preview KV namespace ID
+
+# AI binding for Cloudflare AI Gateway (sentiment analysis)
+# Optional - bot works without AI if credentials not provided
+[ai]
+binding = "AI"

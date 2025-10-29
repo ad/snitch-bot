@@ -1,0 +1,25 @@
+{
+  "name": "anonymous-feedback-bot",
+  "version": "1.0.0",
+  "description": "Anonymous feedback Telegram bot on Cloudflare Workers",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "cloudflare",
+    "workers",
+    "feedback"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
